@@ -12,7 +12,7 @@ pipeline{
             steps {
                 withSonarQubeEnv('sonarqube') {
                     sh 'mvn sonar:sonar'
-                }   
+                }
             }
         }
         stage('Quality Gate') {
@@ -40,7 +40,7 @@ pipeline{
         }
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $NEXUS_REPO/petclinicapps .'
+                sh 'docker build -t $NEXUS_REPO/myapp .'
             }
         }
         stage('Push Artifact to Nexus Repo') {
@@ -58,11 +58,11 @@ pipeline{
                 version: '1.0'
             }
         }
-        stage('Trivy fs Scan') {
-            steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
-        }
+        // stage('Trivy fs Scan') {
+        //     steps {
+        //         sh "trivy fs . > trivyfs.txt"
+        //     }
+        // }
         stage('Log Into Nexus Docker Repo') {
             steps {
                 sh 'docker login --username $NEXUS_USER --password $NEXUS_PASSWORD $NEXUS_REPO'
@@ -70,18 +70,24 @@ pipeline{
         }
         stage('Push to Nexus Docker Repo') {
             steps {
-                sh 'docker push $NEXUS_REPO/petclinicapps'
+                sh 'docker push $NEXUS_REPO/myapp'
             }
         }
         stage('Trivy image Scan') {
             steps {
-                sh "trivy image $NEXUS_REPO/petclinicapps > trivyfs.txt"
+                sh "trivy image $NEXUS_REPO/myapp > trivyfs.txt"
+            }
+        }
+        stage('Delete image from jenkins server') {
+            steps {
+                sh 'docker rmi $NEXUS_REPO/myapp'
             }
         }
         stage('Deploy to stage') {
             steps {
                 sshagent(['ansible-key']) {
-                    sh 'ssh -o StrictHostKeyChecking=no -J ec2-user@$BASTION_HOST ec2-user@$ANSIBLE_HOST "ansible-playbook -i /etc/ansible/stage_hosts /etc/ansible/deployment.yml"'
+                    sh '''ssh -t -o StrictHostKeyChecking=no ec2-user@$BASTION_HOST "ssh -o StrictHostKeyChecking=no ec2-user@$ANSIBLE_HOST 'ansible-playbook -i /etc/ansible/stage_hosts /etc/ansible/deployment.yml'" '''
+                    //sh 'ssh -t -o StrictHostKeyChecking=no -J ec2-user@$BASTION_HOST ec2-user@$ANSIBLE_HOST "ansible-playbook -i /etc/ansible/stage_hosts /etc/ansible/deployment.yml"'
                 }
             }
         }
@@ -109,7 +115,7 @@ pipeline{
         stage('Deploy to prod') {
             steps {
                 sshagent(['ansible-key']) {
-                    sh 'ssh -o StrictHostKeyChecking=no -J ec2-user@$BASTION_HOST ec2-user@$ANSIBLE_HOST "ansible-playbook -i /etc/ansible/prod_hosts /etc/ansible/deployment.yml"'
+                    sh '''ssh -t -o StrictHostKeyChecking=no ec2-user@$BASTION_HOST "ssh -o StrictHostKeyChecking=no ec2-user@$ANSIBLE_HOST 'ansible-playbook -i /etc/ansible/prod_hosts /etc/ansible/deployment.yml'" '''
                 }
             }
         }
@@ -129,5 +135,3 @@ pipeline{
         }
     }
 }
-    
-
